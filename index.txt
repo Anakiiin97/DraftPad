@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JournalistPad | V17 Minimalist</title>
+    <style>
+        :root {
+            --bg-page: #f5f2eb;
+            --bg-editor: #fdfbf7;
+            --text-main: #1a1a1a;
+            --accent: #0056b3;
+            --save-btn: #27ae60;
+            --border: #d1ccc0;
+            --side-panel: #efeadf;
+            --text-title: #000000;
+        }
+
+        body.dark-mode {
+            --bg-page: #121212;
+            --bg-editor: #1e1e1e;
+            --text-main: #f0f0f0;
+            --accent: #4dabf7;
+            --save-btn: #2ecc71;
+            --border: #333333;
+            --side-panel: #252525;
+            --text-title: #ffffff;
+        }
+
+        /* Mode Focus */
+        body.focus-mode #left-sidebar, 
+        body.focus-mode #notes-panel,
+        body.focus-mode #toolbar,
+        body.focus-mode #title-counter,
+        body.focus-mode #save-status { display: none !important; }
+        body.focus-mode main { margin-top: 50px; box-shadow: none; border: none; background: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        #left-sidebar {
+            width: 220px;
+            background: rgba(0,0,0,0.05);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .tab-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            font-size: 1.1rem;
+            background: transparent;
+            user-select: none;
+        }
+
+        .tab-item.active { background: var(--bg-editor); font-weight: bold; border-left: 6px solid var(--accent); }
+        .tab-item.dragging { opacity: 0.4; border: 2px dashed var(--accent); }
+
+        .drag-handle {
+            cursor: grab;
+            margin-right: 8px;
+            color: #ccc;
+            font-size: 1rem;
+        }
+        
+        .tab-title-text { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        
+        .delete-btn { margin-left: 5px; cursor: pointer; font-weight: normal; font-size: 1.2rem; }
+        .delete-btn:hover { color: #e74c3c; }
+
+        #main-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        #toolbar {
+            padding: 10px 20px;
+            background: var(--bg-editor);
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        main {
+            max-width: 900px;
+            width: 95%;
+            margin: 30px auto;
+            background: var(--bg-editor);
+            padding: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+
+        #title-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-title);
+            outline: none;
+            margin-bottom: 5px;
+            resize: none;
+            font-family: inherit;
+            overflow: hidden;
+            display: block;
+            line-height: 1.2;
+        }
+
+        #title-counter { font-size: 1.1rem; color: #777; margin-bottom: 30px; font-weight: bold; }
+
+        #editor {
+            font-size: 1.6rem;
+            line-height: 1.8;
+            outline: none;
+            min-height: 600px;
+            color: var(--text-main);
+        }
+
+        .btn { padding: 8px 14px; cursor: pointer; border-radius: 6px; border: 1px solid var(--border); background: white; font-weight: bold; font-size: 0.9rem; color: #333;}
+        .btn:hover { background: #f0f0f0; }
+        .btn-primary { background: var(--accent); color: white !important; border: none; }
+        .btn-save { background: var(--save-btn); color: white !important; border: none; }
+
+        #notes-panel {
+            width: 350px;
+            background: var(--side-panel);
+            border-left: 2px solid var(--border);
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        #notes-area {
+            flex-grow: 1;
+            background: var(--bg-editor);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 15px;
+            font-size: 1.2rem;
+            outline: none;
+            resize: none;
+        }
+        
+        #save-indicator { width: 15px; height: 15px; background-color: var(--save-btn); border-radius: 50%; display: none; box-shadow: 0 0 10px var(--save-btn); }
+        
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        #exit-focus { 
+            display: none; position: fixed; bottom: 20px; right: 20px; 
+            padding: 15px 25px; background: var(--accent); color: white; 
+            border-radius: 50px; border: none; cursor: pointer; font-weight: bold; z-index: 100;
+        }
+        body.focus-mode #exit-focus { display: block; }
+    </style>
+</head>
+<body>
+
+<button id="exit-focus" onclick="toggleFocus()">Sortir du Focus (Esc)</button>
+
+<div id="left-sidebar">
+    <button class="btn btn-primary" onclick="addNewTab()" style="margin-bottom:20px;">+ Nouvel Article</button>
+    <div id="tabs-list"></div>
+</div>
+
+<div id="main-area">
+    <div id="toolbar">
+        <button class="btn btn-save" onclick="manualSave()">💾 Enregistrer</button>
+        <button class="btn" onclick="toggleDarkMode()">🌙 Mode Nuit</button>
+        <button class="btn" onclick="toggleFocus()">🎯 Focus</button>
+        <button class="btn" onclick="toggleNotes()">📋 Notes</button>
+        <button class="btn" onclick="exportText()">📤 Export .txt</button>
+        <button class="btn" onclick="showHistory()">📜 Hist.</button>
+
+        <div style="margin-left:auto; display:flex; align-items:center; gap:15px;">
+            <span id="word-count" style="font-weight:bold; font-size: 0.9rem;">0 mots</span>
+            <div id="save-indicator"></div>
+        </div>
+    </div>
+
+    <main>
+        <textarea id="title-input" rows="1" placeholder="Titre de l'article..." oninput="autoGrowTitle(); updateTitleStats();"></textarea>
+        <div id="title-counter">0 / 90 caractères</div>
+        <div id="editor" contenteditable="true" placeholder="Rédigez ici..."></div>
+        <p id="save-status" style="font-size: 0.9rem; color: #777; margin-top:30px; font-weight: bold;">Sauvegarde : --</p>
+    </main>
+</div>
+
+<div id="notes-panel">
+    <h3 style="color: var(--text-main)">Sources & Notes</h3>
+    <textarea id="notes-area" placeholder="Vos notes..."></textarea>
+    <button class="btn" onclick="toggleNotes()" style="margin-top:15px;">Fermer</button>
+</div>
+
+<script>
+    const STORAGE_KEY = 'journalistData_V17_Final';
+    
+    let slots = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [{ title: "Premier Article", content: "", notes: "", history: [], kw: "" }];
+    let currentIdx = 0;
+
+    const editor = document.getElementById('editor');
+    const titleInput = document.getElementById('title-input');
+    const notesArea = document.getElementById('notes-area');
+
+    function autoGrowTitle() {
+        titleInput.style.height = "auto";
+        titleInput.style.height = (titleInput.scrollHeight) + "px";
+    }
+
+    function selectTab(i) {
+        saveToMemory();
+        currentIdx = parseInt(i);
+        loadCurrentSlot();
+        renderTabs();
+    }
+
+    function loadCurrentSlot() {
+        const s = slots[currentIdx];
+        if(!s) return;
+        titleInput.value = s.title || "";
+        editor.innerHTML = s.content || "";
+        notesArea.value = s.notes || "";
+        document.getElementById('save-status').innerText = s.lastSave ? "Sauvegarde : " + s.lastSave : "Non enregistré";
+        setTimeout(autoGrowTitle, 10); 
+        updateStats();
+        updateTitleStats();
+    }
+
+    function saveToMemory() {
+        if(slots[currentIdx]) {
+            slots[currentIdx].title = titleInput.value;
+            slots[currentIdx].content = editor.innerHTML;
+            slots[currentIdx].notes = notesArea.value;
+        }
+    }
+
+    function manualSave() {
+        saveToMemory();
+        const now = new Date();
+        const timeStr = now.getHours() + "h" + now.getMinutes().toString().padStart(2, '0');
+        slots[currentIdx].lastSave = timeStr;
+        
+        if(!slots[currentIdx].history) slots[currentIdx].history = [];
+        slots[currentIdx].history.push({ time: timeStr, title: titleInput.value, content: editor.innerHTML });
+        if(slots[currentIdx].history.length > 20) slots[currentIdx].history.shift();
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
+        document.getElementById('save-status').innerText = "Dernière sauvegarde : " + timeStr;
+        renderTabs();
+        flashIndicator();
+    }
+
+    // Drag and Drop
+    let dragSrcIndex = null;
+
+    function renderTabs() {
+        const list = document.getElementById('tabs-list');
+        list.innerHTML = '';
+        slots.forEach((s, i) => {
+            const d = document.createElement('div');
+            d.className = `tab-item ${i === currentIdx ? 'active' : ''}`;
+            d.draggable = true;
+            d.dataset.index = i;
+            const displayTitle = (s.title && s.title.trim() !== "") ? s.title.substring(0,15) : 'Sans titre';
+            d.innerHTML = `<span class="drag-handle">⠿</span><span class="tab-title-text">${displayTitle}</span><span class="delete-btn" onclick="deleteTab(${i}, event)">×</span>`;
+            d.onclick = () => selectTab(i);
+            d.addEventListener('dragstart', handleDragStart);
+            d.addEventListener('dragover', handleDragOver);
+            d.addEventListener('drop', handleDrop);
+            d.addEventListener('dragend', handleDragEnd);
+            list.appendChild(d);
+        });
+    }
+
+    function handleDragStart(e) { dragSrcIndex = this.dataset.index; this.classList.add('dragging'); }
+    function handleDragOver(e) { e.preventDefault(); return false; }
+    function handleDrop(e) {
+        e.stopPropagation();
+        const targetIndex = this.dataset.index;
+        if (dragSrcIndex !== targetIndex) {
+            saveToMemory();
+            const movedItem = slots.splice(dragSrcIndex, 1)[0];
+            slots.splice(targetIndex, 0, movedItem);
+            if (currentIdx == dragSrcIndex) currentIdx = parseInt(targetIndex);
+            else if (currentIdx > dragSrcIndex && currentIdx <= targetIndex) currentIdx--;
+            else if (currentIdx < dragSrcIndex && currentIdx >= targetIndex) currentIdx++;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
+            renderTabs();
+        }
+        return false;
+    }
+    function handleDragEnd() { this.classList.remove('dragging'); }
+
+    setInterval(() => {
+        if(editor.innerText.trim().length > 5) {
+            saveToMemory();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
+            flashIndicator();
+        }
+    }, 2 * 60 * 1000);
+
+    function flashIndicator() {
+        const dot = document.getElementById('save-indicator');
+        dot.style.display = 'block';
+        dot.style.animation = 'fadeOut 2s forwards';
+        setTimeout(() => { dot.style.display = 'none'; }, 2000);
+    }
+
+    function exportText() {
+        const text = editor.innerText;
+        const blob = new Blob([text], {type: "text/plain"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${titleInput.value || 'article'}.txt`;
+        a.click();
+    }
+
+    function toggleFocus() { document.body.classList.toggle('focus-mode'); }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === "Escape" && document.body.classList.contains('focus-mode')) toggleFocus();
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); manualSave(); }
+    });
+
+    function updateTitleStats() {
+        const len = titleInput.value.length;
+        document.getElementById('title-counter').innerText = `${len} / 90 caractères`;
+        const activeTabText = document.querySelector('.tab-item.active .tab-title-text');
+        if(activeTabText) activeTabText.innerText = titleInput.value.substring(0,15) || 'Sans titre';
+    }
+
+    function updateStats() {
+        const text = editor.innerText.trim();
+        const words = text ? text.split(/\s+/).length : 0;
+        document.getElementById('word-count').innerText = words + " mots";
+    }
+
+    function toggleDarkMode() { document.body.classList.toggle('dark-mode'); }
+    function toggleNotes() {
+        const p = document.getElementById('notes-panel');
+        p.style.display = (p.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    function addNewTab() {
+        saveToMemory();
+        slots.push({ title: "Nouveau", content: "", notes: "", history: [], kw: "" });
+        currentIdx = slots.length - 1;
+        loadCurrentSlot();
+        renderTabs();
+    }
+
+    function deleteTab(i, e) {
+        e.stopPropagation();
+        if(slots.length > 1 && confirm("Supprimer cet article ?")) {
+            slots.splice(i, 1);
+            currentIdx = 0;
+            loadCurrentSlot();
+            renderTabs();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
+        }
+    }
+
+    function showHistory() {
+        const hist = slots[currentIdx].history;
+        if(!hist || hist.length === 0) return alert("Aucun historique.");
+        let menu = "Restaurer :\n";
+        hist.forEach((v, i) => menu += `${i} : ${v.time}\n`);
+        const choice = prompt(menu);
+        if(choice !== null && hist[choice]) {
+            editor.innerHTML = hist[choice].content;
+            titleInput.value = hist[choice].title;
+            updateStats();
+            autoGrowTitle();
+        }
+    }
+
+    editor.addEventListener('input', updateStats);
+    loadCurrentSlot();
+    renderTabs();
+</script>
+
+</body>
+</html>
